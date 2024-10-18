@@ -41,6 +41,7 @@ botonPublicar.addEventListener("click", async () => {
                 texto: nuevaPublicacion.value, // Texto de la publicación
                 userId: idUsuario, // ID del usuario que publica
                 userName: auth.currentUser.displayName, // Nombre del usuario que publica
+                photoURL: auth.currentUser.photoURL, // Foto de perfil del usuario que publica
                 timestamp: new Date() // Fecha y hora de la publicación
             });
             nuevaPublicacion.value = "";  // Limpiar el área de texto
@@ -59,12 +60,24 @@ async function cargarPublicaciones() {
     const consultaSnapshot = await getDocs(collection(db, "publicaciones")); // Obtener todas las publicaciones
     consultaSnapshot.forEach((doc) => {
         const publicacion = doc.data(); // Datos de la publicación
+        console.log(publicacion);
+        
+        // Crear un nuevo div para la publicación
         const publicacionDiv = document.createElement("div"); // Crear un nuevo div para la publicación
         publicacionDiv.classList.add("publicacion"); // Agregar clase a la publicación
 
+        // Convertir Timestamp a una fecha legible
+        const fechaPublicacion = publicacion.timestamp.toDate();
+        const horaPublicacion = fechaPublicacion.toLocaleTimeString();
+        const fechaFormateada = fechaPublicacion.toLocaleDateString();
+
         // Contenido de la publicación
         let contenido = `
-            <p><strong>${publicacion.userName}:</strong> ${publicacion.texto}</p>
+            <div class="d-flex align-items-center mb-2">
+                <img src="${publicacion.photoURL}" alt="Foto de perfil" class="rounded-circle me-2" width="40" height="40">
+                <p><strong>${publicacion.userName}</strong> - <small>${fechaFormateada} a las ${horaPublicacion}</small></p>
+            </div>
+            <p>${publicacion.texto}</p>
         `;
 
         // Mostrar botones solo si es el autor de la publicación
