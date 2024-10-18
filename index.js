@@ -1,8 +1,10 @@
 // Importar Firebase y las funciones necesarias
 import './firebase.js';
-import { auth, db } from './firebase.js';
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
+import { auth, db, storage } from './firebase.js';
+import { onAuthStateChanged, updateProfile } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
 import { collection, addDoc, getDocs, deleteDoc, updateDoc, doc } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-storage.js";
+
 
 // Obtener elementos del DOM
 let nombreUsuario = document.getElementById("displayName"); // Nombre del usuario
@@ -10,6 +12,12 @@ let publicacionesDiv = document.getElementById("publicaciones"); // Contenedor d
 let botonPublicar = document.getElementById("publicar"); // Botón para publicar
 let nuevaPublicacion = document.getElementById("nueva_publicacion"); // Área de texto para nueva publicación
 let idUsuario = null; // Almacenar el ID del usuario autenticado
+
+// Variables de modal para editar perfil
+let nuevoNombre = document.getElementById("nuevoNombre");
+let nuevaFoto = document.getElementById("nuevaFoto");
+let guardarPerfilBtn = document.getElementById("guardarPerfil");
+
 
 // Variables para el modal de edición
 let modalEditar = new bootstrap.Modal(document.getElementById('editarModal')); // Modal de edición
@@ -71,10 +79,18 @@ async function cargarPublicaciones() {
         const horaPublicacion = fechaPublicacion.toLocaleTimeString();
         const fechaFormateada = fechaPublicacion.toLocaleDateString();
 
+        // Asignar la foto de perfil con if...else
+        let fotoPerfil;
+        if (publicacion.photoURL) {
+            fotoPerfil = publicacion.photoURL;
+        } else {
+            fotoPerfil = "perfil.jpeg";
+        }
+
         // Contenido de la publicación
         let contenido = `
             <div class="d-flex align-items-center mb-2">
-                <img src="${publicacion.photoURL}" alt="Foto de perfil" class="rounded-circle me-2" width="40" height="40">
+                <img src="${fotoPerfil}" alt="Foto de perfil" class="rounded-circle me-2" width="40" height="40">
                 <p><strong>${publicacion.userName}</strong> - <small>${fechaFormateada} a las ${horaPublicacion}</small></p>
             </div>
             <p>${publicacion.texto}</p>
@@ -124,3 +140,45 @@ window.eliminarPublicacion = async function (id) {
         console.log("Error al eliminar publicación: ", error); // Manejar errores al eliminar
     }
 };
+
+
+// Actualizar perfil (nombre y foto)
+guardarPerfilBtn.addEventListener("click", async () => {
+    let user = auth.currentUser; // Usuario autenticado
+    let updates = {};
+
+    // Si el nombre ha sido actualizado
+    if (nuevoNombre.value.trim() !== "") {
+        updates.displayName = nuevoNombre.value;
+    }
+
+    // Si se seleccionó una nueva foto
+    if (nuevaFoto.files.length > 0) {
+        const archivoFoto = nuevaFoto.files[0];
+        const fotoRef = ref(storage, 'foto_perfiles/' + user.uid); // Referencia al storage en Firebase
+
+        // Subir la nueva foto de perfil a Firebase Storage
+        await uploadBytes(fotoRef, archivoFoto);
+        const urlFoto = await getDownloadURL(fotoRef); // Obtener la URL de la foto subida
+        updates.photoURL = urlFoto;
+    }
+
+    // Aplicar las actualizaciones al perfil del usuario
+    await updateProfile(user, updates);
+
+    // Actualizar la interfaz con los nuevos datos
+    if (updates.displayName) {
+        displayName.textContent = updates.displayName;
+    }
+    if (updates.photoURL) {
+        document.getElementById("fotoPerfil").src = updates.photoURL;
+    }
+
+    // Limpiar los campos del formulario
+    nuevoNombre.value = "";
+    nuevaFoto.value = "";
+
+    // Cerrar el modal
+    let actualizarModal = bootstrap.Modal.getInstance(document.getElementById('actualizarModal'));
+    actualizarModal.hide();
+});
