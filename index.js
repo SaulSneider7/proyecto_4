@@ -5,55 +5,65 @@ import { onAuthStateChanged, updateProfile } from "https://www.gstatic.com/fireb
 import { collection, addDoc, getDocs, deleteDoc, updateDoc, doc } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-storage.js";
 
-
-// Obtener elementos del DOM
-let nombreUsuario = document.getElementById("displayName"); // Nombre del usuario
+let nombreUsuario = document.getElementById("displayName");
 let publicacionesDiv = document.getElementById("publicaciones"); // Contenedor de publicaciones
 let botonPublicar = document.getElementById("publicar"); // Botón para publicar
 let nuevaPublicacion = document.getElementById("nueva_publicacion"); // Área de texto para nueva publicación
-let idUsuario = null; // Almacenar el ID del usuario autenticado
+let fotoPublicacion = document.getElementById("foto_publicacion"); // Input de archivo para subir imagen
+let idUsuario = null; 
+
+// Variables para el modal de edición
+let modalEditar = new bootstrap.Modal(document.getElementById('editarModal')); // Modal de edición
+let nuevoTexto = document.getElementById("nuevoTexto"); // Área de texto para editar la publicación
+let idActualEdicion = null; // Almacenar el ID de la publicación que se está editando   
 
 // Variables de modal para editar perfil
 let nuevoNombre = document.getElementById("nuevoNombre");
 let nuevaFoto = document.getElementById("nuevaFoto");
 let guardarPerfilBtn = document.getElementById("guardarPerfil");
 
-
-// Variables para el modal de edición
-let modalEditar = new bootstrap.Modal(document.getElementById('editarModal')); // Modal de edición
-let nuevoTexto = document.getElementById("nuevoTexto"); // Área de texto para editar la publicación
-let idActualEdicion = null; // Almacenar el ID de la publicación que se está editando
-
 // Escuchar los cambios de autenticación
 onAuthStateChanged(auth, (usuario) => {
     if (usuario) {
         // Mostrar el nombre del usuario
-        nombreUsuario.textContent = usuario.displayName || "Usuario";
+        nombreUsuario.innerHTML = usuario.displayName || "Usuario";
         idUsuario = usuario.uid; // Almacenar el ID del usuario
 
         // Recuperar la foto de perfil
         const fotoPerfil = document.getElementById("fotoPerfil");
-        fotoPerfil.src = usuario.photoURL || "perfil.jpeg"; // Foto por defecto
-
-        cargarPublicaciones(); // Cargar publicaciones al iniciar sesión
+        fotoPerfil.src = usuario.photoURL || "user.jpg"; // Foto por defecto
     } else {
-        window.location.href = "login.html"; // Redirigir a la página de inicio de sesión si no está autenticado
+        window.location.href = "login.html"; 
     }
 });
 
-// Publicar nueva publicación
+// Publicar nueva publicación con foto
 botonPublicar.addEventListener("click", async () => {
-    if (nuevaPublicacion.value.trim() !== "") { // Verificar que el campo no esté vacío
+    if (nuevaPublicacion.value.trim() !== "" || fotoPublicacion.files.length > 0) { // Verificar que al menos uno no esté vacío
         try {
+            let urlFoto = null; // Inicialmente sin foto
+            if (fotoPublicacion.files.length > 0) {
+                const archivoFoto = fotoPublicacion.files[0];
+                const fotoRef = ref(storage, 'fotos_publicaciones/' + archivoFoto.name); // Crear referencia en Firebase Storage
+                // Subir la foto de la publicación a Firebase Storage
+                await uploadBytes(fotoRef, archivoFoto);
+                urlFoto = await getDownloadURL(fotoRef); // Obtener la URL de la foto subida
+            }
+
+            // Guardar la publicación con o sin imagen en Firestore
             await addDoc(collection(db, "publicaciones"), {
                 texto: nuevaPublicacion.value, // Texto de la publicación
                 userId: idUsuario, // ID del usuario que publica
                 userName: auth.currentUser.displayName, // Nombre del usuario que publica
                 photoURL: auth.currentUser.photoURL, // Foto de perfil del usuario que publica
+                imagenPublicacion: urlFoto, // URL de la imagen de la publicación (si existe)
                 timestamp: new Date() // Fecha y hora de la publicación
             });
             nuevaPublicacion.value = "";  // Limpiar el área de texto
-            cargarPublicaciones(); // Recargar publicaciones
+            fotoPublicacion.value = "";  // Limpiar el input de imagen
+            
+            // llamar a la funcion
+            cargarPublicaciones();
         } catch (error) {
             console.log("Error al publicar: ", error); // Manejar errores al publicar
         }
@@ -62,15 +72,13 @@ botonPublicar.addEventListener("click", async () => {
     }
 });
 
-// Cargar todas las publicaciones
+// Cargar todas las publicaciones, incluyendo imágenes
 async function cargarPublicaciones() {
     publicacionesDiv.innerHTML = ""; // Limpiar publicaciones previas
-    const consultaSnapshot = await getDocs(collection(db, "publicaciones")); // Obtener todas las publicaciones
-    consultaSnapshot.forEach((doc) => {
-        const publicacion = doc.data(); // Datos de la publicación
-        console.log(publicacion);
-        
-        // Crear un nuevo div para la publicación
+    const consulta = await getDocs(collection(db, "publicaciones")); // Obtener todas las publicaciones
+    
+    consulta.forEach((doc) => {
+        const publicacion = doc.data(); // Datos de la publicación        
         const publicacionDiv = document.createElement("div"); // Crear un nuevo div para la publicación
         publicacionDiv.classList.add("publicacion"); // Agregar clase a la publicación
 
@@ -80,37 +88,35 @@ async function cargarPublicaciones() {
         const fechaFormateada = fechaPublicacion.toLocaleDateString();
 
         // Asignar la foto de perfil con if...else
-        let fotoPerfil;
-        if (publicacion.photoURL) {
-            fotoPerfil = publicacion.photoURL;
-        } else {
-            fotoPerfil = "perfil.jpeg";
-        }
+        let fotoPerfil = publicacion.photoURL || "user.jpg";
 
-        // Contenido de la publicación
+        // Contenido de la publicación, incluyendo imagen si existe
         let contenido = `
-            <div class="d-flex align-items-center mb-2">
-                <img src="${fotoPerfil}" alt="Foto de perfil" class="rounded-circle me-2" width="40" height="40">
-                <p><strong>${publicacion.userName}</strong> - <small>${fechaFormateada} a las ${horaPublicacion}</small></p>
-            </div>
-            <p>${publicacion.texto}</p>
+            <img src=${fotoPerfil} width="40" heigth="40">
+            <p><strong>${publicacion.userName}:</strong> ${publicacion.texto}</p>
+            <p>${fechaFormateada} ${horaPublicacion}</p>
         `;
+        // Agregar imagen de la publicación si existe
+        if (publicacion.imagenPublicacion) {
+            contenido += `<img src="${publicacion.imagenPublicacion}" width="200" height="200">`;
+        }
 
         // Mostrar botones solo si es el autor de la publicación
         if (publicacion.userId === idUsuario) {
             contenido += `
-                <button class="btn btn-warning" onclick="abrirModal('${doc.id}', '${publicacion.texto}')">Editar</button>
-                <button class="btn btn-danger" onclick="eliminarPublicacion('${doc.id}')">Eliminar</button>
+                <button onclick="abrirModal('${doc.id}', '${publicacion.texto}')">Editar</button>
+                <button onclick="eliminarPublicacion('${doc.id}')">Eliminar</button>
             `;
         }
-
         publicacionDiv.innerHTML = contenido; // Asignar contenido al div
         publicacionesDiv.appendChild(publicacionDiv); // Agregar la publicación al contenedor
     });
 }
+cargarPublicaciones();
 
 // Función para abrir el modal de edición
 window.abrirModal = function (id, texto) {
+    console.log("modal");
     idActualEdicion = id; // Almacenar el ID de la publicación que se va a editar
     nuevoTexto.value = texto; // Colocar el texto actual en el área de texto del modal
     modalEditar.show(); // Mostrar el modal
@@ -139,33 +145,27 @@ window.eliminarPublicacion = async function (id) {
     } catch (error) {
         console.log("Error al eliminar publicación: ", error); // Manejar errores al eliminar
     }
-};
-
+};  
 
 // Actualizar perfil (nombre y foto)
 guardarPerfilBtn.addEventListener("click", async () => {
     let user = auth.currentUser; // Usuario autenticado
     let updates = {};
-
     // Si el nombre ha sido actualizado
     if (nuevoNombre.value.trim() !== "") {
         updates.displayName = nuevoNombre.value;
     }
-
     // Si se seleccionó una nueva foto
     if (nuevaFoto.files.length > 0) {
         const archivoFoto = nuevaFoto.files[0];
         const fotoRef = ref(storage, 'foto_perfiles/' + user.uid); // Referencia al storage en Firebase
-
         // Subir la nueva foto de perfil a Firebase Storage
         await uploadBytes(fotoRef, archivoFoto);
         const urlFoto = await getDownloadURL(fotoRef); // Obtener la URL de la foto subida
         updates.photoURL = urlFoto;
     }
-
     // Aplicar las actualizaciones al perfil del usuario
     await updateProfile(user, updates);
-
     // Actualizar la interfaz con los nuevos datos
     if (updates.displayName) {
         displayName.textContent = updates.displayName;
@@ -173,11 +173,9 @@ guardarPerfilBtn.addEventListener("click", async () => {
     if (updates.photoURL) {
         document.getElementById("fotoPerfil").src = updates.photoURL;
     }
-
     // Limpiar los campos del formulario
     nuevoNombre.value = "";
     nuevaFoto.value = "";
-
     // Cerrar el modal
     let actualizarModal = bootstrap.Modal.getInstance(document.getElementById('actualizarModal'));
     actualizarModal.hide();
