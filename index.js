@@ -1,7 +1,7 @@
 // Importar Firebase y las funciones necesarias
 import './firebase.js';
 import { auth, db, storage } from './firebase.js';
-import { onAuthStateChanged, updateProfile } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
+import { onAuthStateChanged, updateProfile, signOut  } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
 import { collection, addDoc, getDocs, deleteDoc, updateDoc, doc } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-storage.js";
 
@@ -197,4 +197,16 @@ guardarPerfilBtn.addEventListener("click", async () => {
     // Cerrar el modal
     let actualizarModal = bootstrap.Modal.getInstance(document.getElementById('actualizarModal'));
     actualizarModal.hide();
+});
+
+// Botón de cierre de sesión
+document.getElementById("logoutButton").addEventListener("click", () => {
+    signOut(auth)
+        .then(() => {
+            // cerrar sesión
+            window.location.href = "login.html";
+        })
+        .catch((error) => {
+            console.log("Error al cerrar sesión: ", error); // Manejar errores en el cierre de sesión
+        });
 });
