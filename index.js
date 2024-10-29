@@ -10,6 +10,8 @@ let publicacionesDiv = document.getElementById("publicaciones"); // Contenedor d
 let botonPublicar = document.getElementById("publicar"); // Botón para publicar
 let nuevaPublicacion = document.getElementById("nueva_publicacion"); // Área de texto para nueva publicación
 let fotoPublicacion = document.getElementById("foto_publicacion"); // Input de archivo para subir imagen
+let videoPublicacion = document.getElementById("video_publicacion"); // Input de archivo para subir video
+
 let idUsuario = null; 
 
 // Variables para el modal de edición
@@ -39,79 +41,93 @@ onAuthStateChanged(auth, (usuario) => {
     }
 });
 
-// Publicar nueva publicación con foto
+// Publicar nueva publicación con foto y video
 botonPublicar.addEventListener("click", async () => {
-    if (nuevaPublicacion.value.trim() !== "" || fotoPublicacion.files.length > 0) { // Verificar que al menos uno no esté vacío
+    if (nuevaPublicacion.value.trim() !== "" || fotoPublicacion.files.length > 0 || videoPublicacion.files.length > 0) {
         try {
             let urlFoto = null; // Inicialmente sin foto
+            let urlVideo = null; // Inicialmente sin video
+
+            // Subir foto si existe
             if (fotoPublicacion.files.length > 0) {
                 const archivoFoto = fotoPublicacion.files[0];
-                const fotoRef = ref(storage, 'fotos_publicaciones/' + archivoFoto.name); // Crear referencia en Firebase Storage
-                // Subir la foto de la publicación a Firebase Storage
+                const fotoRef = ref(storage, 'fotos_publicaciones/' + archivoFoto.name);
                 await uploadBytes(fotoRef, archivoFoto);
-                urlFoto = await getDownloadURL(fotoRef); // Obtener la URL de la foto subida
+                urlFoto = await getDownloadURL(fotoRef);
             }
 
-            // Guardar la publicación con o sin imagen en Firestore
+            // Subir video si existe
+            if (videoPublicacion.files.length > 0) {
+                const archivoVideo = videoPublicacion.files[0];
+                const videoRef = ref(storage, 'videos_publicaciones/' + archivoVideo.name);
+                await uploadBytes(videoRef, archivoVideo);
+                urlVideo = await getDownloadURL(videoRef);
+            }
+
+            // Guardar la publicación con o sin imagen/video en Firestore
             await addDoc(collection(db, "publicaciones"), {
-                texto: nuevaPublicacion.value, // Texto de la publicación
-                userId: idUsuario, // ID del usuario que publica
-                userName: auth.currentUser.displayName, // Nombre del usuario que publica
-                photoURL: auth.currentUser.photoURL, // Foto de perfil del usuario que publica
-                imagenPublicacion: urlFoto, // URL de la imagen de la publicación (si existe)
-                timestamp: new Date() // Fecha y hora de la publicación
+                texto: nuevaPublicacion.value,
+                userId: idUsuario,
+                userName: auth.currentUser.displayName,
+                photoURL: auth.currentUser.photoURL,
+                imagenPublicacion: urlFoto,
+                videoPublicacion: urlVideo, // URL del video de la publicación (si existe)
+                timestamp: new Date()
             });
-            nuevaPublicacion.value = "";  // Limpiar el área de texto
-            fotoPublicacion.value = "";  // Limpiar el input de imagen
-            
-            // llamar a la funcion
+
+            // Limpiar campos de publicación
+            nuevaPublicacion.value = "";
+            fotoPublicacion.value = "";
+            videoPublicacion.value = "";
+
             cargarPublicaciones();
         } catch (error) {
-            console.log("Error al publicar: ", error); // Manejar errores al publicar
+            console.log("Error al publicar: ", error);
         }
     } else {
-        console.log("El campo de publicación está vacío."); // Mensaje si el campo está vacío
+        console.log("El campo de publicación está vacío.");
     }
 });
 
 // Cargar todas las publicaciones, incluyendo imágenes
 async function cargarPublicaciones() {
-    publicacionesDiv.innerHTML = ""; // Limpiar publicaciones previas
-    const consulta = await getDocs(collection(db, "publicaciones")); // Obtener todas las publicaciones
-    
+    publicacionesDiv.innerHTML = "";
+    const consulta = await getDocs(collection(db, "publicaciones"));
+
     consulta.forEach((doc) => {
-        const publicacion = doc.data(); // Datos de la publicación        
-        const publicacionDiv = document.createElement("div"); // Crear un nuevo div para la publicación
-        publicacionDiv.classList.add("publicacion"); // Agregar clase a la publicación
+        const publicacion = doc.data();
+        const publicacionDiv = document.createElement("div");
+        publicacionDiv.classList.add("publicacion");
 
         // Convertir Timestamp a una fecha legible
         const fechaPublicacion = publicacion.timestamp.toDate();
         const horaPublicacion = fechaPublicacion.toLocaleTimeString();
         const fechaFormateada = fechaPublicacion.toLocaleDateString();
 
-        // Asignar la foto de perfil con if...else
         let fotoPerfil = publicacion.photoURL || "user.jpg";
-
-        // Contenido de la publicación, incluyendo imagen si existe
         let contenido = `
             <img src=${fotoPerfil} width="40" heigth="40">
             <p><strong>${publicacion.userName}:</strong> ${publicacion.texto}</p>
             <p>${fechaFormateada} ${horaPublicacion}</p>
         `;
-        // Agregar imagen de la publicación si existe
+
         if (publicacion.imagenPublicacion) {
             contenido += `<img src="${publicacion.imagenPublicacion}" width="200" height="200">`;
         }
 
-        // Mostrar botones solo si es el autor de la publicación
+        if (publicacion.videoPublicacion) {
+            contenido += `<video src="${publicacion.videoPublicacion}" controls type="video/mp4"></video>`;
+        }
+
         if (publicacion.userId === idUsuario) {
             contenido += `
                 <button onclick="abrirModal('${doc.id}', '${publicacion.texto}')">Editar</button>
                 <button onclick="eliminarPublicacion('${doc.id}')">Eliminar</button>
             `;
         }
-        publicacionDiv.innerHTML = contenido; // Asignar contenido al div
-        publicacionesDiv.appendChild(publicacionDiv); // Agregar la publicación al contenedor
+
+        publicacionDiv.innerHTML = contenido;
+        publicacionesDiv.appendChild(publicacionDiv);
     });
 }
 cargarPublicaciones();
