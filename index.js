@@ -22,6 +22,8 @@ let nuevoNombre = document.getElementById("nuevoNombre");
 let nuevaFoto = document.getElementById("nuevaFoto");
 let guardarPerfilBtn = document.getElementById("guardarPerfil");
 
+console.log("hola mundo");
+
 // Escuchar los cambios de autenticación
 onAuthStateChanged(auth, (usuario) => {
     if (usuario) {
