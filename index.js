@@ -2,7 +2,7 @@
 import './firebase.js';
 import { auth, db, storage } from './firebase.js';
 import { onAuthStateChanged, updateProfile, signOut  } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
-import { collection, addDoc, getDocs, deleteDoc, updateDoc, doc } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+import { query, orderBy, collection, addDoc, getDocs, deleteDoc, updateDoc, doc } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-storage.js";
 
 let nombreUsuario = document.getElementById("displayName");
@@ -92,7 +92,8 @@ botonPublicar.addEventListener("click", async () => {
 // Cargar todas las publicaciones, incluyendo imágenes
 async function cargarPublicaciones() {
     publicacionesDiv.innerHTML = "";
-    const consulta = await getDocs(collection(db, "publicaciones"));
+    const publicacionesQuery = query(collection(db, "publicaciones"), orderBy("timestamp", "desc"));
+    const consulta = await getDocs(publicacionesQuery);
 
     consulta.forEach((doc) => {
         const publicacion = doc.data();
