@@ -1,7 +1,7 @@
 // Importar Firebase y las funciones necesarias
 import './firebase.js';
 import { auth, db, storage } from './firebase.js';
-import { onAuthStateChanged, updateProfile, signOut  } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
+import { onAuthStateChanged, updateProfile, signOut } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
 import { query, orderBy, collection, addDoc, getDocs, deleteDoc, updateDoc, doc } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-storage.js";
 
@@ -12,7 +12,7 @@ let nuevaPublicacion = document.getElementById("nueva_publicacion"); // Área de
 let fotoPublicacion = document.getElementById("foto_publicacion"); // Input de archivo para subir imagen
 let videoPublicacion = document.getElementById("video_publicacion"); // Input de archivo para subir video
 
-let idUsuario = null; 
+let idUsuario = null;
 
 // Variables para el modal de edición
 let modalEditar = new bootstrap.Modal(document.getElementById('editarModal')); // Modal de edición
@@ -37,7 +37,7 @@ onAuthStateChanged(auth, (usuario) => {
         const fotoPerfil = document.getElementById("fotoPerfil");
         fotoPerfil.src = usuario.photoURL || "user.jpg"; // Foto por defecto
     } else {
-        window.location.href = "login.html"; 
+        window.location.href = "login.html";
     }
 });
 
@@ -127,8 +127,18 @@ async function cargarPublicaciones() {
             `;
         }
 
+        // Sección de comentarios
+        contenido += `
+         <div class="comentarios" id="comentarios-${doc.id}"></div>
+         <textarea id="comentario-${doc.id}" placeholder="Escribe un comentario..."></textarea>
+         <button onclick="agregarComentario('${doc.id}')">Comentar</button>
+        `;
+
         publicacionDiv.innerHTML = contenido;
         publicacionesDiv.appendChild(publicacionDiv);
+
+        // Cargar los comentarios de esta publicación
+        cargarComentarios(doc.id);
     });
 }
 cargarPublicaciones();
@@ -164,7 +174,7 @@ window.eliminarPublicacion = async function (id) {
     } catch (error) {
         console.log("Error al eliminar publicación: ", error); // Manejar errores al eliminar
     }
-};  
+};
 
 // Actualizar perfil (nombre y foto)
 guardarPerfilBtn.addEventListener("click", async () => {
@@ -211,3 +221,44 @@ document.getElementById("logoutButton").addEventListener("click", () => {
             console.log("Error al cerrar sesión: ", error); // Manejar errores en el cierre de sesión
         });
 });
+
+// Función para cargar comentarios de una publicación
+async function cargarComentarios(publicacionId) {
+    const comentariosDiv = document.getElementById(`comentarios-${publicacionId}`);
+    comentariosDiv.innerHTML = ""; // Limpiar comentarios previos
+
+    const comentariosQuery = query(collection(db, "publicaciones", publicacionId, "comentarios"), orderBy("timestamp", "asc"));
+    const comentariosSnapshot = await getDocs(comentariosQuery);
+
+    comentariosSnapshot.forEach((doc) => {
+        const comentario = doc.data();
+        const comentarioDiv = document.createElement("div");
+        comentarioDiv.classList.add("comentario");
+        comentarioDiv.innerHTML = `<strong>${comentario.userName}:</strong> ${comentario.texto}`;
+        comentariosDiv.appendChild(comentarioDiv);
+    });
+}
+
+// Función para agregar un comentario a una publicación
+async function agregarComentario(publicacionId) {
+    const comentarioInput = document.getElementById(`comentario-${publicacionId}`);
+    const textoComentario = comentarioInput.value.trim();
+
+    if (textoComentario !== "") {
+        try {
+            await addDoc(collection(db, "publicaciones", publicacionId, "comentarios"), {
+                texto: textoComentario,
+                userId: idUsuario,
+                userName: auth.currentUser.displayName,
+                timestamp: new Date()
+            });
+
+            comentarioInput.value = ""; // Limpiar el campo de comentario
+            cargarComentarios(publicacionId); // Recargar los comentarios
+        } catch (error) {
+            console.log("Error al agregar comentario: ", error);
+        }
+    }
+}
+
+window.agregarComentario = agregarComentario;
