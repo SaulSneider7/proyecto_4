@@ -26,6 +26,13 @@ let guardarPerfilBtn = document.getElementById("guardarPerfil");
 
 console.log("hola mundo");
 
+// Variables de la cámara
+let camaraContainer = document.getElementById("camaraContainer");
+let vistaCamara = document.getElementById("vistaCamara");
+let fotoCanvas = document.getElementById("fotoCanvas");
+let activarCamaraBtn = document.getElementById("activarCamara");
+let capturarFotoBtn = document.getElementById("capturarFoto");
+
 // Escuchar los cambios de autenticación
 onAuthStateChanged(auth, (usuario) => {
     if (usuario) {
@@ -262,3 +269,69 @@ async function agregarComentario(publicacionId) {
 }
 
 window.agregarComentario = agregarComentario;
+
+
+// ==============================
+//              CAMARA
+// ==============================
+// Función para activar la cámara
+activarCamaraBtn.addEventListener("click", async () => {
+    camaraContainer.style.display = "block"; // Mostrar el contenedor de la cámara
+
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        vistaCamara.srcObject = stream;
+    } catch (error) {
+        console.error("Error al acceder a la cámara: ", error);
+    }
+});
+
+// Función para capturar la foto
+capturarFotoBtn.addEventListener("click", () => {
+    const contexto = fotoCanvas.getContext("2d");
+    fotoCanvas.width = vistaCamara.videoWidth;
+    fotoCanvas.height = vistaCamara.videoHeight;
+    contexto.drawImage(vistaCamara, 0, 0, fotoCanvas.width, fotoCanvas.height);
+
+    // Convertir la imagen capturada en base64
+    const fotoDataUrl = fotoCanvas.toDataURL("image/png");
+
+    // Cargar la foto capturada en la publicación
+    publicarFoto(fotoDataUrl);
+    
+    // Parar el video y ocultar la cámara
+    let stream = vistaCamara.srcObject;
+    let tracks = stream.getTracks();
+    tracks.forEach(track => track.stop());
+    vistaCamara.srcObject = null;
+    camaraContainer.style.display = "none";
+});
+
+// Función para publicar la foto capturada
+async function publicarFoto(fotoDataUrl) {
+    try {
+        // Convertir la base64 a un blob
+        const response = await fetch(fotoDataUrl);
+        const blob = await response.blob();
+
+        // Subir la foto capturada a Firebase Storage
+        const fotoRef = ref(storage, 'fotos_publicaciones/' + Date.now() + '.png');
+        await uploadBytes(fotoRef, blob);
+        const urlFoto = await getDownloadURL(fotoRef);
+
+        // Guardar la publicación en Firestore con la foto capturada
+        await addDoc(collection(db, "publicaciones"), {
+            texto: nuevaPublicacion.value,
+            userId: idUsuario,
+            userName: auth.currentUser.displayName,
+            photoURL: auth.currentUser.photoURL,
+            imagenPublicacion: urlFoto,
+            timestamp: new Date()
+        });
+
+        nuevaPublicacion.value = ""; // Limpiar el área de texto
+        cargarPublicaciones(); // Recargar publicaciones
+    } catch (error) {
+        console.error("Error al publicar foto: ", error);
+    }
+}
